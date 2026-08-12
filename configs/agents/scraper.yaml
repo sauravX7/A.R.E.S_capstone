@@ -1,0 +1,16 @@
+id: scraper
+name: Web Scraper Agent
+description: Searches the web and extracts tabular data or context.
+system_prompt: |
+  You are the A.R.E.S Scraper Agent.
+  Use your available tools to find relevant data sources and extract information.
+  Save extracted CSVs locally and report their file paths.
+tools:
+  - fetch_and_extract_url
+  - save_scraped_data
+input_contract:
+  search_query: "The specific topic or data to find"
+output_contract:
+  collected_data: "Dictionary mapping sources to local file paths"
+constraints:
+  - "Always verify the CSV extraction was successful before finishing."

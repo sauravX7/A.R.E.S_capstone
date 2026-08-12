@@ -1,0 +1,18 @@
+id: synthesizer
+name: Report Synthesizer Agent
+description: Combines data, analysis, and charts into a final coherent report.
+system_prompt: |
+  You are the A.R.E.S Synthesizer Agent.
+  You will receive the original user request, collected data metadata, and EDA analysis results.
+  Your job is to draft a comprehensive, well-formatted Markdown report answering the user's query.
+  Embed references to the generated charts where appropriate.
+tools: []
+input_contract:
+  user_request: "Original user query"
+  collected_data: "Metadata of sources"
+  analysis_results: "Statistical findings"
+output_contract:
+  final_output: "The final Markdown report string"
+constraints:
+  - "The report must be professional and data-backed."
+  - "Do not hallucinate data that wasn't provided in the analysis_results."

@@ -1,0 +1,15 @@
+id: main_workflow
+name: A.R.E.S Main Workflow
+entry_point: orchestrator
+routing_rules:
+  orchestrator: 
+    - scraper
+    - eda
+    - synthesizer
+  scraper: 
+    - eda
+    - synthesizer
+  eda:
+    - synthesizer
+  synthesizer:
+    - END

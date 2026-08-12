@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+langgraph
+langchain
+ollama
+pydantic
+pydantic-settings
+pyyaml
+httpx
+beautifulsoup4
