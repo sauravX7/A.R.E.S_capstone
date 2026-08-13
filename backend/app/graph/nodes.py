@@ -12,46 +12,66 @@ CONFIG_DIR = Path(__file__).parent.parent.parent.parent / "configs"
 WORKFLOW_CONFIG = load_workflow_config(CONFIG_DIR / "workflows/main_workflow.yaml")
 ORCHESTRATOR_CONFIG = load_agent_config(CONFIG_DIR / "agents/orchestrator.yaml")
 
+from app.core.workflow_validator import validate_transition
+
 def orchestrator_node(state: AgentState) -> AgentState:
     """
     The Orchestrator node.
     Responsible for analyzing the user_request and deciding the next routing step.
     """
+    logger.info("Executing Orchestrator Node")
     llm = get_llm()
     structured_llm = llm.with_structured_output(RoutingDecision)
     
     user_request = state.get("user_request", "")
     
+    # Track state
+    if "workflow_status" not in state: state["workflow_status"] = "pending"
+    if "workflow_step" not in state: state["workflow_step"] = 0
+    if "agent_invocations" not in state: state["agent_invocations"] = {}
+    if "completed_agents" not in state: state["completed_agents"] = []
+    
     # Construct the prompt combining the YAML system prompt and the user request
-    prompt = f"{ORCHESTRATOR_CONFIG.system_prompt}\n\nUser Request: {user_request}\n\nDetermine the next agent."
+    prompt = f"{ORCHESTRATOR_CONFIG.system_prompt}\n\nUser Request: {user_request}\n\nCurrent Workflow Step: {state['workflow_step']}\nCompleted Agents: {state['completed_agents']}\n\nDetermine the next immediate agent."
     
     try:
         # Invoke LLM and get structured output
         decision: RoutingDecision = structured_llm.invoke(prompt)
-        next_agent = decision.next_agent
         
-        # Validation against YAML Configuration
-        allowed_routes = WORKFLOW_CONFIG.routing_rules.get("orchestrator", [])
+        # Advisory required agents
+        if "required_agents" not in state: state["required_agents"] = []
+        state["required_agents"] = list(set(state["required_agents"] + decision.required_agents))
         
-        if next_agent not in allowed_routes and next_agent != "END":
-            error_msg = f"Validation Error: LLM chose '{next_agent}', which is not in allowed routes {allowed_routes}"
-            logger.error(error_msg)
-            
-            # Safe initialization if keys don't exist yet
+        # Validate transition
+        is_valid, error_msg = validate_transition(state, decision, WORKFLOW_CONFIG)
+        
+        if not is_valid:
             if "errors" not in state: state["errors"] = []
             
-            state["errors"].append(error_msg)
-            state["routing_decision"] = "ERROR" # We use a special ERROR state to route to END
+            if error_msg == "MAX_WORKFLOW_STEPS_EXCEEDED":
+                state["workflow_status"] = "max_steps_exceeded"
+                state["errors"].append("Global workflow limit (MAX_WORKFLOW_STEPS) exceeded.")
+            elif error_msg.startswith("MAX_AGENT_INVOCATIONS_EXCEEDED"):
+                state["workflow_status"] = "failed"
+                state["errors"].append(f"Agent invocation limit exceeded: {error_msg}")
+            else:
+                state["workflow_status"] = "failed"
+                state["errors"].append(error_msg)
+                
+            logger.error(f"Orchestrator validation failed: {error_msg}")
+            state["routing_decision"] = "END" # We route to END on failure instead of a custom ERROR node
             state["current_agent"] = "orchestrator"
             return state
 
         # Valid decision
-        state["routing_decision"] = next_agent
+        state["workflow_step"] += 1 # Incremented EXACTLY ONCE by Orchestrator on valid transition
+        state["workflow_status"] = "running"
+        state["routing_decision"] = decision.next_agent
         state["current_agent"] = "orchestrator"
         
         # Safely append to messages
         if "messages" not in state: state["messages"] = []
-        state["messages"].append(f"Orchestrator routed to {next_agent}. Reason: {decision.reason}")
+        state["messages"].append(f"Orchestrator routed to {decision.next_agent}. Reason: {decision.reason}")
         
     except Exception as e:
         error_msg = f"Orchestrator LLM Failure: {str(e)}"
@@ -59,7 +79,8 @@ def orchestrator_node(state: AgentState) -> AgentState:
         
         if "errors" not in state: state["errors"] = []
         state["errors"].append(error_msg)
-        state["routing_decision"] = "ERROR"
+        state["workflow_status"] = "failed"
+        state["routing_decision"] = "END"
         state["current_agent"] = "orchestrator"
 
     return state
@@ -100,6 +121,9 @@ def scraper_node(state: AgentState) -> AgentState:
     # Bounded execution loop
     MAX_ITERATIONS = 3
     
+    if "agent_invocations" not in state: state["agent_invocations"] = {}
+    state["agent_invocations"]["scraper"] = state["agent_invocations"].get("scraper", 0) + 1
+    
     for i in range(MAX_ITERATIONS):
         try:
             response = llm.invoke(messages)
@@ -109,6 +133,8 @@ def scraper_node(state: AgentState) -> AgentState:
             if not getattr(response, "tool_calls", None):
                 # No tool calls means the agent is done
                 state["messages"].append(f"Scraper Agent finished: {response.content}")
+                if "completed_agents" not in state: state["completed_agents"] = []
+                if "scraper" not in state["completed_agents"]: state["completed_agents"].append("scraper")
                 break
                 
             # Execute tool calls
@@ -144,7 +170,7 @@ def scraper_node(state: AgentState) -> AgentState:
             break
             
     state["current_agent"] = "scraper"
-    state["routing_decision"] = "END" # Explicitly end for now to prove routing works without looping
+    state["routing_decision"] = "orchestrator" # Back to orchestrator
     return state
 
 from app.tools.eda_tools import inspect_dataset, missing_values_analysis, descriptive_statistics, execute_custom_code
@@ -174,6 +200,9 @@ def eda_node(state: AgentState) -> AgentState:
     
     system_message = {"role": "system", "content": EDA_CONFIG.system_prompt}
     messages = [system_message, {"role": "user", "content": f"{context_str}\n\nTask: {state.get('user_request', '')}"}]
+    
+    if "agent_invocations" not in state: state["agent_invocations"] = {}
+    state["agent_invocations"]["eda"] = state["agent_invocations"].get("eda", 0) + 1
     
     try:
         request: EDARequest = llm.invoke(messages)
@@ -228,6 +257,8 @@ def eda_node(state: AgentState) -> AgentState:
             
             if "analysis_results" not in state: state["analysis_results"] = []
             state["analysis_results"].append(final_result.model_dump())
+            if "completed_agents" not in state: state["completed_agents"] = []
+            if "eda" not in state["completed_agents"]: state["completed_agents"].append("eda")
             
     except Exception as e:
         error_msg = f"EDA execution error: {str(e)}"
@@ -238,13 +269,111 @@ def eda_node(state: AgentState) -> AgentState:
     if "messages" not in state: state["messages"] = []
     state["messages"].append("EDA Agent finished.")
     state["current_agent"] = "eda"
-    state["routing_decision"] = "END"
+    state["routing_decision"] = "orchestrator" # Route back to orchestrator
     return state
 
+from app.models.synthesis import SynthesisResult
+
+SYNTHESIZER_CONFIG = load_agent_config(CONFIG_DIR / "agents/synthesizer.yaml")
+
 def synthesizer_node(state: AgentState) -> AgentState:
+    logger.info("Executing Synthesizer Node")
+    
+    collected_data = state.get("collected_data", {})
+    analysis_results = state.get("analysis_results", [])
+    
+    if "agent_invocations" not in state: state["agent_invocations"] = {}
+    state["agent_invocations"]["synthesizer"] = state["agent_invocations"].get("synthesizer", 0) + 1
+
+    # 1. Determine Evidence Availability (Case A, B, C, D)
+    if not collected_data and not analysis_results:
+        # Case D: Nothing available
+        logger.warning("Synthesizer: No evidence available. Failing safely without LLM invocation.")
+        error_result = SynthesisResult(
+            answer="There is insufficient evidence to produce the requested answer. No data or analysis results were found.",
+            key_findings=[],
+            supporting_artifacts=[],
+            warnings=["No collected data or analysis results available."]
+        )
+        state["final_output"] = error_result.model_dump()
+        state["workflow_status"] = "failed"
+        state["current_agent"] = "synthesizer"
+        state["routing_decision"] = "END"
+        return state
+        
+    # 2. Build compact evidence context
+    evidence_parts = []
+    if collected_data:
+        evidence_parts.append("--- COLLECTED DATA ARTIFACTS ---")
+        for aid, data in collected_data.items():
+            # Compact summary, assuming data is a dict representing the artifact
+            evidence_parts.append(f"Artifact ID: {aid}\nType: {data.get('artifact_type', 'UNKNOWN')}\nSource: {data.get('source_url', 'UNKNOWN')}\nContent Sample: {str(data)[:500]}")
+            
+    if analysis_results:
+        evidence_parts.append("--- EDA ANALYSIS RESULTS ---")
+        for idx, res in enumerate(analysis_results):
+            evidence_parts.append(f"Analysis {idx + 1}:\n{str(res)[:1000]}")
+            
+    evidence_str = "\n\n".join(evidence_parts)
+    
+    # 3. Invoke LLM with Structured Output
+    llm = get_llm().with_structured_output(SynthesisResult)
+    system_message = {"role": "system", "content": SYNTHESIZER_CONFIG.system_prompt}
+    messages = [
+        system_message,
+        {"role": "user", "content": f"User Request: {state.get('user_request', '')}\n\nEVIDENCE:\n{evidence_str}"}
+    ]
+    
+    try:
+        response: SynthesisResult = llm.invoke(messages)
+        
+        # 4. Artifact Validation (Fail Closed)
+        valid_artifact_ids = set(collected_data.keys())
+        for ref_id in response.supporting_artifacts:
+            if ref_id not in valid_artifact_ids:
+                error_msg = f"Synthesizer attempted to reference an invalid or hallucinated artifact ID: {ref_id}"
+                logger.error(error_msg)
+                
+                # Fail closed
+                if "errors" not in state: state["errors"] = []
+                state["errors"].append(error_msg)
+                
+                error_result = SynthesisResult(
+                    answer="Synthesis failed due to a strict security validation error: The agent attempted to reference fabricated artifacts.",
+                    key_findings=[],
+                    supporting_artifacts=[],
+                    warnings=[error_msg]
+                )
+                state["final_output"] = error_result.model_dump()
+                state["workflow_status"] = "failed"
+                state["current_agent"] = "synthesizer"
+                state["routing_decision"] = "END"
+                return state
+                
+        # 5. Success
+        state["final_output"] = response.model_dump()
+        state["workflow_status"] = "completed"
+        if "completed_agents" not in state: state["completed_agents"] = []
+        if "synthesizer" not in state["completed_agents"]: state["completed_agents"].append("synthesizer")
+        
+    except Exception as e:
+        # Case: Structured Output Failure or general error
+        error_msg = f"Synthesizer structured output parsing failed: {str(e)}"
+        logger.error(error_msg)
+        if "errors" not in state: state["errors"] = []
+        state["errors"].append(error_msg)
+        
+        error_result = SynthesisResult(
+            answer=f"Synthesis failed due to an internal parsing error.",
+            key_findings=[],
+            supporting_artifacts=[],
+            warnings=[error_msg]
+        )
+        state["final_output"] = error_result.model_dump()
+        state["workflow_status"] = "failed"
+
     if "messages" not in state: state["messages"] = []
-    state["messages"].append("Synthesizer Agent executed (Placeholder).")
+    state["messages"].append("Synthesizer Agent finished.")
     state["current_agent"] = "synthesizer"
     state["routing_decision"] = "END"
-    state["final_output"] = "This is a placeholder final report from the Synthesizer."
     return state

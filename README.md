@@ -133,6 +133,65 @@ For development and experimentation (`EDA_EXECUTION_MODE=untrusted_subprocess`),
 ### Artifact Integration
 EDA results are appended to `AgentState["analysis_results"]` using the `EDAResult` schema, natively embedding `CollectedArtifact` objects to ensure provenance is carried fully intact to the final Synthesizer step.
 
+## 📝 Synthesizer Agent & Evidence Grounding
+
+The Synthesizer Agent is the final step in the pipeline. It is an **evidence-to-answer component**. 
+Its responsibility is to consume the validated outputs produced by the Scraper and EDA agents and produce the final user-facing response.
+
+### Core Philosophy
+*   **Scraper** = Data acquisition
+*   **EDA** = Controlled data analysis
+*   **Synthesizer** = Evidence-grounded communication
+
+### Inputs & Outputs
+*   **Inputs**: The original `user_request`, the validated `collected_data`, and the structured `analysis_results`.
+*   **Outputs**: A structured JSON `SynthesisResult` containing the final `answer`, `key_findings`, verified `supporting_artifacts`, and any `warnings` regarding data limitations.
+
+### Strict Security Boundaries
+1.  **Zero Tools**: The Synthesizer has exactly zero tools available to it. It cannot execute code, scrape websites, or modify files. It simply reads the existing LangGraph state and writes an answer.
+2.  **Evidence as Untrusted Data**: The Synthesizer's prompt actively guards against **prompt injection**. Any instructions found within the scraped content or dataset are strictly treated as untrusted data and ignored. Evidence cannot override system instructions.
+3.  **Fail-Closed Artifact Validation**: If the LLM hallucinates an artifact ID when generating its `supporting_artifacts` list, the application catches the mismatch, fails closed, and generates a structured error response rather than silently passing invalid citations to the user.
+4.  **No Hallucination Without Evidence**: If no evidence is present in the state (e.g. both Scraper and EDA failed), the agent exits early without even calling the LLM, returning a safe deterministic error.
+
+## 🔄 Phase 5: End-to-End Workflow & Intelligent Orchestration
+
+Phase 5 replaces the previously linear worker flow with a robust **Star-Topology Orchestration** model that dynamically manages state across long-running tasks.
+
+### 1. Star-Topology Design
+Instead of a fixed sequence (Orchestrator -> Scraper -> EDA -> Synthesizer -> END), A.R.E.S. now implements a conditional star loop.
+*   **Central Hub**: The Orchestrator acts as the central brain.
+*   **Workers**: Scraper, EDA, and Synthesizer are isolated worker nodes.
+*   **Workflow Loop**: Every worker must route back to the Orchestrator after execution. The Orchestrator re-evaluates the state (`collected_data`, `analysis_results`) and actively decides the next appropriate worker.
+
+### 2. State & Safety Management
+State limits ensure the loop does not run indefinitely:
+*   `MAX_WORKFLOW_STEPS`: Global limit (e.g. 10 transitions) on the entire system loop.
+*   `MAX_AGENT_INVOCATIONS`: Per-agent limit (e.g. 3 invocations) to prevent a single agent from looping in failure.
+*   **Advisory Planning**: The Orchestrator proposes a sequence of `required_agents`, but this is treated solely as an advisory plan. Only the immediate `next_agent` decision authorizes execution.
+
+### 3. Verification & Validation (workflow_validator.py)
+All Orchestrator transitions are intercepted by a central validator to enforce rules before execution:
+1.  **Topology Compliance**: Ensures the proposed transition is allowed in `main_workflow.yaml`.
+2.  **Prerequisites**: Ensures workers like the EDA Agent only run if valid `dataset_artifact_id` dependencies exist in the state.
+3.  **Sanitization**: Unknown hallucinated agent destinations are safely routed to `END` with detailed error logs.
+
+## 🔄 Phase 6: Frontend Integration & End-to-End Productization
+
+Phase 6 introduces a fully integrated Next.js user workspace, establishing a strong typing boundary and seamless End-to-End orchestration.
+
+### 1. Robust API Contract
+The frontend enforces strict runtime validation (`isChatResponse`) to ensure all incoming data perfectly matches the canonical `ChatResponse` model:
+- Primary Answer
+- Structured Key Findings
+- Supporting Evidence / Artifact IDs
+- Conditional Warnings & Limitations
+
+### 2. A.R.E.S. Workspace UI
+The frontend uses a custom-built, Tailwind-styled workspace that provides:
+- **Clean State Management**: Loading states, disconnected states, and accessible error boundaries.
+- **Strict Modularity**: Presentational components (`response-view.tsx`, `evidence-list.tsx`, etc.) keep the architecture maintainable without introducing heavy 3rd-party UI libraries.
+- **Untrusted Client Model**: The frontend does not execute code, select agents, or dictate workflow. It strictly passes user requests to the backend, maintaining all Phase 1–5 security boundaries.
+
 ## 🛠️ Setup Instructions
 
 Follow these steps to run the A.R.E.S. Capstone project locally.
@@ -179,16 +238,27 @@ The project is a monorepo consisting of a Next.js frontend and a FastAPI backend
    ```bash
    cd frontend
    ```
-2. Install Node dependencies (if not already installed):
+2. Configure the environment variable:
+   ```bash
+   cp .env.example .env.local
+   ```
+   *(Ensure `NEXT_PUBLIC_API_URL=http://localhost:8000` is set)*
+
+3. Install Node dependencies:
    ```bash
    npm install
    ```
-3. Start the Next.js development server:
+4. Start the Next.js development server:
    ```bash
    npm run dev
    ```
 
 ### 4. Testing the Application
-1. **Backend Health Check**: Open `http://localhost:8000/health` in your browser. It should return `{"status":"ok"}`.
+1. **Backend Tests**: Run the full suite in the backend directory:
+   ```bash
+   cd backend
+   pytest tests/ -s
+   ```
 2. **Frontend UI**: Open `http://localhost:3000` in your browser. You will see the A.R.E.S UI showing the backend connection status.
-3. **Chat Interface**: Use the text input on the frontend to send a message. The request will travel through the FastAPI backend, hit the LangGraph node, and query your local Ollama model.
+3. **Chat Interface**: Enter a research/analysis request into the multiline input and submit. The frontend will display a loading state while LangGraph processes the request via Ollama, and will render the structured response safely.
+

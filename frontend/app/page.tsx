@@ -2,68 +2,78 @@
 
 import { useState, useEffect } from "react";
 import { checkHealth, sendChatMessage } from "@/lib/api";
+import { ChatResponse } from "@/lib/api/types";
+import ChatInput from "@/components/chat-input";
+import ResponseView from "@/components/response-view";
 
 export default function Home() {
   const [healthStatus, setHealthStatus] = useState<string>("Checking...");
-  const [chatResponse, setChatResponse] = useState<string>("");
-  const [message, setMessage] = useState<string>("Hello, A.R.E.S!");
+  const [message, setMessage] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
+  const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function getHealth() {
       const res = await checkHealth();
-      setHealthStatus(res ? `Backend is ${res.status}` : "Backend is offline");
+      setHealthStatus(res ? `Backend is Connected` : "Backend is Offline");
     }
     getHealth();
   }, []);
 
   const handleSend = async () => {
+    if (!message.trim()) return;
+    
     setLoading(true);
-    const res = await sendChatMessage(message);
-    setChatResponse(res ? res.response : "Error communicating with backend");
+    setError(null);
+    setChatResponse(null);
+    
+    const result = await sendChatMessage(message);
+    
+    if (result.success) {
+      setChatResponse(result.data);
+    } else {
+      setError(result.error);
+    }
+    
     setLoading(false);
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-50 text-gray-900">
-      <div className="z-10 max-w-2xl w-full items-center justify-between font-mono text-sm">
-        <h1 className="text-4xl font-bold text-center mb-8">A.R.E.S. Capstone</h1>
-        
-        <div className="bg-white shadow rounded-lg p-6 mb-8 border border-gray-200">
-          <h2 className="text-xl font-semibold mb-4">System Status</h2>
-          <div className="flex items-center space-x-2">
-            <span className={`h-3 w-3 rounded-full ${healthStatus.includes('ok') ? 'bg-green-500' : 'bg-red-500'}`}></span>
-            <span>{healthStatus}</span>
+    <main className="min-h-screen bg-gray-50 text-gray-900 font-sans selection:bg-blue-200">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">A.R.E.S.</h1>
+            <span className="text-sm text-gray-500 hidden sm:inline-block">| Advanced Research & Execution System</span>
+          </div>
+          <div className="flex items-center space-x-2 text-sm" aria-label="Backend status">
+            <span className={`h-2.5 w-2.5 rounded-full ${healthStatus.includes('Connected') ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`} aria-hidden="true"></span>
+            <span className="font-medium text-gray-600">{healthStatus}</span>
           </div>
         </div>
+      </header>
 
-        <div className="bg-white shadow rounded-lg p-6 border border-gray-200">
-          <h2 className="text-xl font-semibold mb-4">Test LLM Connection</h2>
-          
-          <div className="flex flex-col space-y-4">
-            <input 
-              type="text" 
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              className="border border-gray-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Send a message to Ollama..."
+      <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <div className="space-y-8">
+          <section aria-labelledby="input-heading">
+            <h2 id="input-heading" className="sr-only">Research Input</h2>
+            <ChatInput 
+              message={message} 
+              setMessage={setMessage} 
+              onSend={handleSend} 
+              disabled={loading || healthStatus.includes('Offline')} 
             />
-            
-            <button 
-              onClick={handleSend}
-              disabled={loading || !healthStatus.includes('ok')}
-              className="bg-blue-600 text-white rounded p-2 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? "Sending..." : "Send to LangGraph"}
-            </button>
-            
-            {chatResponse && (
-              <div className="mt-4 p-4 bg-gray-100 rounded border border-gray-200">
-                <p className="font-semibold text-gray-700 mb-1">Response:</p>
-                <p className="whitespace-pre-wrap">{chatResponse}</p>
-              </div>
-            )}
-          </div>
+          </section>
+
+          <section aria-labelledby="results-heading">
+            <h2 id="results-heading" className="sr-only">Analysis Results</h2>
+            <ResponseView 
+              response={chatResponse} 
+              error={error} 
+              isLoading={loading} 
+            />
+          </section>
         </div>
       </div>
     </main>

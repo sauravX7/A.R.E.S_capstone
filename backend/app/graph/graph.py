@@ -39,9 +39,11 @@ def build_graph():
         }
     )
     
-    # Placeholder edges: currently all placeholder agents just end the workflow to prove routing worked
-    workflow.add_edge("scraper", END)
-    workflow.add_edge("eda", END)
+    # Edges: worker nodes route back to orchestrator for sequential orchestration
+    workflow.add_edge("scraper", "orchestrator")
+    workflow.add_edge("eda", "orchestrator")
+    
+    # Synthesizer is strictly final
     workflow.add_edge("synthesizer", END)
     
     # Compile

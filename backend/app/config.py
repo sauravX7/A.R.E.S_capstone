@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8000
     NEXT_PUBLIC_API_URL: str = "http://localhost:8000"
+    MAX_WORKFLOW_STEPS: int = 10
+    MAX_AGENT_INVOCATIONS: int = 3
 
     class Config:
         env_file = ".env"
