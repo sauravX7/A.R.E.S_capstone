@@ -2,7 +2,7 @@ from app.graph.graph import app_graph
 from app.graph.state import AgentState
 
 initial_state = AgentState(
-    user_request="Extract data from https://en.wikipedia.org/wiki/Artificial_intelligence and perform descriptive statistics analysis on the dataset, then summarize.",
+    user_request="Fetch the dataset from https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv and run descriptive statistics on it, then summarize the findings.",
     workflow_status="pending",
     workflow_step=0,
     current_agent=None,
@@ -15,7 +15,7 @@ initial_state = AgentState(
     analysis_results=[],
     errors=[],
     final_output=None,
-    input="Extract data from https://en.wikipedia.org/wiki/Artificial_intelligence and perform descriptive statistics analysis on the dataset, then summarize.",
+    input="Fetch the dataset from https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv and run descriptive statistics on it, then summarize the findings.",
     output=None
 )
 
