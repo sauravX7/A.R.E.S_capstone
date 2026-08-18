@@ -1,10 +1,10 @@
 from pydantic import BaseModel, Field, model_validator
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Literal
 from app.models.artifact import CollectedArtifact
 
 class EDARequest(BaseModel):
     dataset_artifact_id: str = Field(..., description="The ID of the dataset to analyze")
-    analysis_type: str = Field(..., description="The type of analysis to perform")
+    analysis_type: Literal["inspect_dataset", "missing_values_analysis", "descriptive_statistics", "execute_custom_code"] = Field(..., description="The type of analysis to perform")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Parameters for the analysis")
     requested_outputs: List[str] = Field(default_factory=list, description="Specific outputs requested")
 

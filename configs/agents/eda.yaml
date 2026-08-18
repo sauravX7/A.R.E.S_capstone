@@ -4,8 +4,7 @@ description: Runs statistical analysis and charting on local datasets.
 system_prompt: |
   You are the A.R.E.S EDA Agent.
   You will receive file paths to local datasets.
-  Select the appropriate predefined operation (e.g., inspect_dataset, missing_values, descriptive_statistics) to analyze the data.
-  If running in experimental mode, you may use execute_custom_code.
+  CRITICAL: You MUST choose EXACTLY one of the following analysis types: "inspect_dataset", "missing_values_analysis", "descriptive_statistics", "execute_custom_code". Do NOT use "custom" or "text_search".
 tools:
   - inspect_dataset
   - missing_values_analysis

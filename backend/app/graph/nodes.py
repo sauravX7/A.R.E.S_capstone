@@ -31,8 +31,10 @@ def orchestrator_node(state: AgentState) -> AgentState:
     if "agent_invocations" not in state: state["agent_invocations"] = {}
     if "completed_agents" not in state: state["completed_agents"] = []
     
+    has_collected_data = bool(state.get("collected_data"))
+    
     # Construct the prompt combining the YAML system prompt and the user request
-    prompt = f"{ORCHESTRATOR_CONFIG.system_prompt}\n\nUser Request: {user_request}\n\nCurrent Workflow Step: {state['workflow_step']}\nCompleted Agents: {state['completed_agents']}\n\nDetermine the next immediate agent."
+    prompt = f"{ORCHESTRATOR_CONFIG.system_prompt}\n\nUser Request: {user_request}\n\nCurrent Workflow Step: {state['workflow_step']}\nCompleted Agents: {state['completed_agents']}\nHas Collected Data: {has_collected_data}\n\nDetermine the next immediate agent."
     
     try:
         # Invoke LLM and get structured output
@@ -329,8 +331,11 @@ def synthesizer_node(state: AgentState) -> AgentState:
         
         # 4. Artifact Validation (Fail Closed)
         valid_artifact_ids = set(collected_data.keys())
+        sanitized_artifacts = []
         for ref_id in response.supporting_artifacts:
-            if ref_id not in valid_artifact_ids:
+            # Sanitize the LLM output in case it includes the "Artifact ID: " prefix
+            clean_id = ref_id.replace("Artifact ID:", "").strip()
+            if clean_id not in valid_artifact_ids:
                 error_msg = f"Synthesizer attempted to reference an invalid or hallucinated artifact ID: {ref_id}"
                 logger.error(error_msg)
                 
@@ -349,8 +354,11 @@ def synthesizer_node(state: AgentState) -> AgentState:
                 state["current_agent"] = "synthesizer"
                 state["routing_decision"] = "END"
                 return state
+            
+            sanitized_artifacts.append(clean_id)
                 
         # 5. Success
+        response.supporting_artifacts = sanitized_artifacts
         state["final_output"] = response.model_dump()
         state["workflow_status"] = "completed"
         if "completed_agents" not in state: state["completed_agents"] = []

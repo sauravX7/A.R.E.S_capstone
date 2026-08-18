@@ -1,9 +1,9 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Literal
 
 class RoutingDecision(BaseModel):
     """Structured output expected from the Orchestrator LLM."""
-    next_agent: str = Field(
+    next_agent: Literal["scraper", "eda", "synthesizer", "END"] = Field(
         ..., 
         description="The exact ID of the immediate agent to invoke next (e.g., 'scraper', 'eda', 'synthesizer', or 'END')."
     )
