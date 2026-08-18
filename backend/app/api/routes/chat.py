@@ -2,6 +2,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.graph.graph import app_graph
 from app.graph.state import AgentState
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -32,16 +35,19 @@ async def chat_endpoint(request: ChatRequest):
         final_state = app_graph.invoke(initial_state)
         
         # Build response based on state
-        if final_state.get("errors"):
-            response_text = f"Error during execution: {final_state['errors'][-1]}"
-        elif final_state.get("final_output"):
+        if final_state.get("final_output"):
             response_text = final_state["final_output"]
+        elif final_state.get("errors"):
+            # Include errors in the response
+            error_msg = final_state['errors'][-1] if final_state['errors'] else "Unknown error"
+            response_text = f"Processed request. Note: {error_msg}"
         else:
-            # Fallback to grabbing the last message or routing decision
+            # Fallback to grabbing the last message
             messages = final_state.get("messages", [])
             last_msg = messages[-1] if messages else "No messages generated."
-            response_text = f"Graph executed successfully. Last state message: {last_msg}"
+            response_text = f"Graph executed. {last_msg}"
             
         return ChatResponse(response=response_text)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Chat endpoint error: {str(e)}", exc_info=True)
+        return ChatResponse(response=f"Backend error: {str(e)}")

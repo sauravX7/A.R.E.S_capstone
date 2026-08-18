@@ -17,17 +17,27 @@ def orchestrator_node(state: AgentState) -> AgentState:
     The Orchestrator node.
     Responsible for analyzing the user_request and deciding the next routing step.
     """
-    llm = get_llm()
-    structured_llm = llm.with_structured_output(RoutingDecision)
-    
     user_request = state.get("user_request", "")
     
-    # Construct the prompt combining the YAML system prompt and the user request
-    prompt = f"{ORCHESTRATOR_CONFIG.system_prompt}\n\nUser Request: {user_request}\n\nDetermine the next agent."
+    # Initialize state keys if they don't exist
+    if "messages" not in state: 
+        state["messages"] = []
+    if "errors" not in state: 
+        state["errors"] = []
     
     try:
+        llm = get_llm()
+        structured_llm = llm.with_structured_output(RoutingDecision)
+        
+        # Construct the prompt combining the YAML system prompt and the user request
+        prompt = f"{ORCHESTRATOR_CONFIG.system_prompt}\n\nUser Request: {user_request}\n\nDetermine the next agent."
+        
         # Invoke LLM and get structured output
         decision: RoutingDecision = structured_llm.invoke(prompt)
+        
+        if decision is None:
+            raise ValueError("LLM returned None response")
+        
         next_agent = decision.next_agent
         
         # Validation against YAML Configuration
@@ -36,31 +46,23 @@ def orchestrator_node(state: AgentState) -> AgentState:
         if next_agent not in allowed_routes and next_agent != "END":
             error_msg = f"Validation Error: LLM chose '{next_agent}', which is not in allowed routes {allowed_routes}"
             logger.error(error_msg)
-            
-            # Safe initialization if keys don't exist yet
-            if "errors" not in state: state["errors"] = []
-            
             state["errors"].append(error_msg)
-            state["routing_decision"] = "ERROR" # We use a special ERROR state to route to END
+            state["routing_decision"] = "ERROR"
             state["current_agent"] = "orchestrator"
             return state
 
         # Valid decision
         state["routing_decision"] = next_agent
         state["current_agent"] = "orchestrator"
-        
-        # Safely append to messages
-        if "messages" not in state: state["messages"] = []
         state["messages"].append(f"Orchestrator routed to {next_agent}. Reason: {decision.reason}")
         
     except Exception as e:
-        error_msg = f"Orchestrator LLM Failure: {str(e)}"
-        logger.error(error_msg)
-        
-        if "errors" not in state: state["errors"] = []
+        error_msg = f"Orchestrator Error: {str(e)}"
+        logger.error(error_msg, exc_info=True)
         state["errors"].append(error_msg)
-        state["routing_decision"] = "ERROR"
+        state["routing_decision"] = "END"
         state["current_agent"] = "orchestrator"
+        state["final_output"] = f"Orchestrator encountered an error: {str(e)}"
 
     return state
 
