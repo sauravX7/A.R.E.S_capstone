@@ -231,6 +231,12 @@ def eda_node(state: AgentState) -> AgentState:
     try:
         request: EDARequest = llm.invoke(messages)
         
+        # Resolve / sanitize dataset artifact ID
+        target_artifact_id = request.dataset_artifact_id.replace("Artifact ID:", "").strip()
+        if target_artifact_id not in available_datasets and available_datasets:
+            logger.warning(f"EDA LLM provided unrecognized artifact ID '{request.dataset_artifact_id}'. Fallback to available artifact '{available_datasets[0]}'")
+            target_artifact_id = available_datasets[0]
+            
         # 3. Execution-mode validation
         if mode == "controlled" and request.analysis_type == "custom_code":
             error_msg = "Security Rejection: custom_code is not allowed in controlled mode."
@@ -242,22 +248,22 @@ def eda_node(state: AgentState) -> AgentState:
             ).model_dump())
         else:
             # 4. Map request to tool
-            # The LLM outputs "inspect_dataset" etc., which we map to the tool function
             tool_name = request.analysis_type
             if request.analysis_type == "custom_code":
                 tool_name = "execute_custom_code"
                 
             if tool_name not in EDA_TOOL_MAP:
-                raise ValueError(f"Unknown analysis_type requested: {tool_name}")
+                # Default to descriptive_statistics or inspect_dataset if unrecognized
+                tool_name = "descriptive_statistics"
                 
             tool_func = EDA_TOOL_MAP[tool_name]
             
             # 5. Execute Tool
-            logger.info(f"EDA executing: {tool_name}")
+            logger.info(f"EDA executing: {tool_name} on {target_artifact_id}")
             if tool_name == "execute_custom_code":
-                raw_result = tool_func.invoke({"artifact_id": request.dataset_artifact_id, "python_code": request.parameters.get("code", "")})
+                raw_result = tool_func.invoke({"artifact_id": target_artifact_id, "python_code": request.parameters.get("code", "")})
             else:
-                raw_result = tool_func.invoke({"artifact_id": request.dataset_artifact_id})
+                raw_result = tool_func.invoke({"artifact_id": target_artifact_id})
                 
             # 6. Parse result and build EDAResult
             try:
@@ -270,25 +276,32 @@ def eda_node(state: AgentState) -> AgentState:
                 errors.append(parsed_result["error"])
                 
             final_result = EDAResult(
-                summary=f"Executed {tool_name} on {request.dataset_artifact_id}",
+                summary=f"Executed {tool_name} on {target_artifact_id}",
                 metrics=parsed_result if not errors else {},
                 findings=[],
                 warnings=[],
-                artifacts=[], # Phase 3B Artifacts not populated by these basic tools yet
+                artifacts=[],
                 execution_metadata={"mode": mode, "tool": tool_name},
                 errors=errors
             )
             
             if "analysis_results" not in state: state["analysis_results"] = []
             state["analysis_results"].append(final_result.model_dump())
-            if "completed_agents" not in state: state["completed_agents"] = []
-            if "eda" not in state["completed_agents"]: state["completed_agents"].append("eda")
             
     except Exception as e:
         error_msg = f"EDA execution error: {str(e)}"
         logger.error(error_msg)
         if "errors" not in state: state["errors"] = []
         state["errors"].append(error_msg)
+        if "analysis_results" not in state: state["analysis_results"] = []
+        state["analysis_results"].append(EDAResult(
+            summary=f"EDA execution error: {str(e)}",
+            metrics={}, findings=[], warnings=[error_msg], artifacts=[],
+            execution_metadata={"mode": mode}, errors=[error_msg]
+        ).model_dump())
+
+    if "completed_agents" not in state: state["completed_agents"] = []
+    if "eda" not in state["completed_agents"]: state["completed_agents"].append("eda")
 
     if "messages" not in state: state["messages"] = []
     state["messages"].append("EDA Agent finished.")
