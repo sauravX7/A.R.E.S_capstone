@@ -21,13 +21,21 @@ export default function ChatPage() {
   const [showAgentStatus, setShowAgentStatus] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Check backend health on mount
+  // Check backend health on mount and periodically
   useEffect(() => {
+    let isMounted = true;
     async function getHealth() {
       const res = await checkHealth();
-      setHealthStatus(res ? "Connected" : "Offline");
+      if (isMounted) {
+        setHealthStatus(res ? "Connected" : "Offline");
+      }
     }
     getHealth();
+    const interval = setInterval(getHealth, 5000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   // Auto-scroll to bottom when new messages arrive
