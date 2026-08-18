@@ -64,9 +64,17 @@ export default function ChatPage() {
       let messageContent = "Error communicating with backend";
       if (res.success) {
         messageContent = res.data.answer;
-        // Optionally append warnings or findings to the UI if present
+        
+        if (res.data.key_findings && res.data.key_findings.length > 0) {
+          messageContent += "\n\n📊 Key Findings:\n" + res.data.key_findings.map((f: string) => `• ${f}`).join("\n");
+        }
+        
+        if (res.data.supporting_artifacts && res.data.supporting_artifacts.length > 0) {
+          messageContent += "\n\n📁 Supporting Artifacts: " + res.data.supporting_artifacts.join(", ");
+        }
+
         if (res.data.warnings && res.data.warnings.length > 0) {
-           messageContent += "\n\n⚠️ Warnings:\n- " + res.data.warnings.join("\n- ");
+           messageContent += "\n\n⚠️ Warnings:\n" + res.data.warnings.map((w: string) => `• ${w}`).join("\n");
         }
       } else {
         messageContent = `Error: ${res.error}`;
