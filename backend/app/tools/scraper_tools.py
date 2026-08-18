@@ -14,7 +14,8 @@ def fetch_and_extract_url(url: str) -> str:
     """
     try:
         # Use httpx for modern, async-compatible HTTP client capabilities
-        response = httpx.get(url, timeout=10.0, follow_redirects=True)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        response = httpx.get(url, headers=headers, timeout=10.0, follow_redirects=True)
         response.raise_for_status()
         
         # Parse HTML and extract text cleanly
@@ -24,14 +25,12 @@ def fetch_and_extract_url(url: str) -> str:
         for script in soup(["script", "style"]):
             script.extract()
             
-        text = soup.get_text(separator='\n')
-        
-        # Collapse multiple newlines/spaces
-        lines = (line.strip() for line in text.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        text = '\n'.join(chunk for chunk in chunks if chunk)
-        
-        return text[:20000] # Cap output to avoid blowing up the LLM context
+        text = soup.get_text(separator=' ', strip=True)
+        # Limit to 8000 chars to avoid overwhelming the LLM
+        if len(text) > 8000:
+            text = text[:8000] + "\n\n... [TRUNCATED FOR LENGTH]"
+            
+        return text
         
     except httpx.HTTPStatusError as e:
         return f"HTTP Error {e.response.status_code} fetching {url}: {e}"

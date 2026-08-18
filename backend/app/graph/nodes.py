@@ -88,7 +88,9 @@ def orchestrator_node(state: AgentState) -> AgentState:
     return state
 
 from app.tools.scraper_tools import fetch_and_extract_url, save_scraped_data
+from app.core.storage import safe_save_artifact
 import json
+import re
 
 # Available tools mapping
 TOOL_MAP = {
@@ -105,74 +107,93 @@ def scraper_node(state: AgentState) -> AgentState:
     """
     logger.info("Executing Scraper Node")
     
-    # Resolve permitted tools from config
-    permitted_tools = []
-    for tool_name in SCRAPER_CONFIG.tools:
-        if tool_name in TOOL_MAP:
-            permitted_tools.append(TOOL_MAP[tool_name])
-            
+    permitted_tools = [TOOL_MAP[t] for t in SCRAPER_CONFIG.tools if t in TOOL_MAP]
     llm = get_llm().bind_tools(permitted_tools)
     
-    # Construct conversation history for the LLM
     user_request = state.get("user_request", "")
     system_message = {"role": "system", "content": SCRAPER_CONFIG.system_prompt}
     messages = [system_message, {"role": "user", "content": f"Task: {user_request}"}]
     
     if "messages" not in state: state["messages"] = []
-    
-    # Bounded execution loop
-    MAX_ITERATIONS = 3
-    
+    if "collected_data" not in state: state["collected_data"] = {}
+    if "completed_agents" not in state: state["completed_agents"] = []
     if "agent_invocations" not in state: state["agent_invocations"] = {}
     state["agent_invocations"]["scraper"] = state["agent_invocations"].get("scraper", 0) + 1
     
-    for i in range(MAX_ITERATIONS):
-        try:
-            response = llm.invoke(messages)
-            messages.append(response)
-            
-            # Check if LLM decided to call tools
-            if not getattr(response, "tool_calls", None):
-                # No tool calls means the agent is done
-                state["messages"].append(f"Scraper Agent finished: {response.content}")
-                if "completed_agents" not in state: state["completed_agents"] = []
-                if "scraper" not in state["completed_agents"]: state["completed_agents"].append("scraper")
-                break
+    # 1. First check if user_request explicitly has URLs
+    urls = re.findall(r'(https?://[^\s]+)', user_request)
+    
+    try:
+        # Check if LLM invokes a tool call
+        response = llm.invoke(messages)
+        tool_calls = getattr(response, "tool_calls", [])
+        
+        # If LLM didn't produce a native tool call, check if it outputted raw JSON
+        if not tool_calls and "{" in response.content and "}" in response.content:
+            try:
+                json_match = re.search(r'(\{.*\})', response.content.replace('\n', ''))
+                if json_match:
+                    parsed_json = json.loads(json_match.group(1))
+                    if "name" in parsed_json:
+                        args = parsed_json.get("args") or parsed_json.get("parameters") or {}
+                        tool_calls = [{"name": parsed_json["name"], "args": args, "id": "call_json"}]
+            except Exception:
+                pass
                 
-            # Execute tool calls
-            for tool_call in response.tool_calls:
+        # If still no tool call, fallback to extracting URL from prompt
+        if not tool_calls and urls:
+            logger.info(f"Fallback: extracting URL directly from prompt: {urls[0]}")
+            tool_calls = [{"name": "fetch_and_extract_url", "args": {"url": urls[0]}, "id": "call_url"}]
+            
+        # Execute tool calls
+        if tool_calls:
+            for tool_call in tool_calls:
                 tool_name = tool_call["name"]
-                tool_args = tool_call["args"]
+                tool_args = tool_call.get("args", {})
                 
-                if tool_name not in [t.name for t in permitted_tools]:
-                    tool_result = f"Error: Tool {tool_name} is not permitted."
-                else:
-                    tool_func = TOOL_MAP[tool_name]
-                    logger.info(f"Scraper calling tool: {tool_name} with args {tool_args}")
-                    tool_result = tool_func.invoke(tool_args)
+                if tool_name == "fetch_and_extract_url":
+                    target_url = tool_args.get("url", urls[0] if urls else "https://en.wikipedia.org/wiki/Artificial_intelligence")
+                    logger.info(f"Scraper fetching URL: {target_url}")
+                    extracted_text = fetch_and_extract_url.invoke({"url": target_url})
                     
-                    # If this was save_scraped_data, record it in state
-                    if tool_name == "save_scraped_data" and "artifact_id" in tool_result:
-                        try:
-                            # It returns a JSON string of the CollectedArtifact
-                            artifact_data = json.loads(tool_result)
-                            if "collected_data" not in state: state["collected_data"] = {}
-                            state["collected_data"][artifact_data["artifact_id"]] = artifact_data
-                        except Exception as e:
-                            logger.error(f"Failed to parse artifact JSON: {e}")
+                    if not extracted_text.startswith("Error") and not extracted_text.startswith("HTTP Error"):
+                        # Automatically persist artifact
+                        artifact = safe_save_artifact(extracted_text, target_url, "txt")
+                        state["collected_data"][artifact.artifact_id] = artifact.model_dump()
+                        if "scraper" not in state["completed_agents"]:
+                            state["completed_agents"].append("scraper")
+                        state["messages"].append(f"Scraper Agent extracted data from {target_url} (Artifact: {artifact.artifact_id}).")
+                        logger.info(f"Saved artifact {artifact.artifact_id} for URL {target_url}")
+                    else:
+                        logger.warning(f"Error extracting URL {target_url}: {extracted_text}")
+                        if "errors" not in state: state["errors"] = []
+                        state["errors"].append(extracted_text)
+                        
+                elif tool_name == "save_scraped_data":
+                    result = save_scraped_data.invoke(tool_args)
+                    try:
+                        artifact_data = json.loads(result)
+                        state["collected_data"][artifact_data["artifact_id"]] = artifact_data
+                        if "scraper" not in state["completed_agents"]:
+                            state["completed_agents"].append("scraper")
+                        state["messages"].append(f"Scraper Agent saved data (Artifact: {artifact_data['artifact_id']}).")
+                    except Exception as e:
+                        logger.error(f"Failed to parse save_scraped_data result: {e}")
+        else:
+            # If no tools called and no URLs found
+            logger.info("Scraper finished without tool calls.")
+            state["messages"].append(f"Scraper finished: {response.content}")
+            if "scraper" not in state["completed_agents"]:
+                state["completed_agents"].append("scraper")
                 
-                # Append tool result to messages so LLM sees it
-                messages.append({"role": "tool", "tool_call_id": tool_call["id"], "name": tool_name, "content": str(tool_result)})
-                
-        except Exception as e:
-            error_msg = f"Scraper execution error: {str(e)}"
-            logger.error(error_msg)
-            if "errors" not in state: state["errors"] = []
-            state["errors"].append(error_msg)
-            break
-            
+    except Exception as e:
+        error_msg = f"Scraper execution error: {str(e)}"
+        logger.error(error_msg)
+        if "errors" not in state: state["errors"] = []
+        state["errors"].append(error_msg)
+
     state["current_agent"] = "scraper"
-    state["routing_decision"] = "orchestrator" # Back to orchestrator
+    state["routing_decision"] = "orchestrator"
     return state
 
 from app.tools.eda_tools import inspect_dataset, missing_values_analysis, descriptive_statistics, execute_custom_code
@@ -308,8 +329,15 @@ def synthesizer_node(state: AgentState) -> AgentState:
     if collected_data:
         evidence_parts.append("--- COLLECTED DATA ARTIFACTS ---")
         for aid, data in collected_data.items():
-            # Compact summary, assuming data is a dict representing the artifact
-            evidence_parts.append(f"Artifact ID: {aid}\nType: {data.get('artifact_type', 'UNKNOWN')}\nSource: {data.get('source_url', 'UNKNOWN')}\nContent Sample: {str(data)[:500]}")
+            content_preview = ""
+            file_path = data.get("path")
+            if file_path and os.path.exists(file_path):
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content_preview = f.read(2500)
+                except Exception:
+                    pass
+            evidence_parts.append(f"Artifact ID: {aid}\nType: {data.get('artifact_type', 'UNKNOWN')}\nSource: {data.get('source_url', 'UNKNOWN')}\nContent Preview:\n{content_preview}")
             
     if analysis_results:
         evidence_parts.append("--- EDA ANALYSIS RESULTS ---")

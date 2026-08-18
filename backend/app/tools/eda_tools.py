@@ -14,18 +14,27 @@ PROCESSED_STORAGE_DIR = (Path(__file__).parent.parent.parent.parent / "data" / "
 PROCESSED_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 def _load_dataset(artifact_id: str) -> pd.DataFrame:
-    """Helper to safely load a CSV from the secure storage."""
-    # This assumes the file exists and is CSV for simplicity of the capstone
-    # A real implementation would query the artifact registry/state to get the exact path
-    file_path = BASE_STORAGE_DIR / f"{artifact_id}.csv"
-    if not file_path.exists():
-        raise FileNotFoundError(f"Artifact {artifact_id}.csv not found in {BASE_STORAGE_DIR}")
+    """Helper to safely load a dataset (CSV, JSON, or TXT) from the secure storage."""
+    for ext in [".csv", ".json", ".txt"]:
+        file_path = BASE_STORAGE_DIR / f"{artifact_id}{ext}"
+        if file_path.exists():
+            if not str(file_path.resolve()).startswith(str(BASE_STORAGE_DIR)):
+                raise ValueError(f"Path Traversal Attempt Detected: {file_path}")
+            if ext == ".csv":
+                return pd.read_csv(file_path)
+            elif ext == ".json":
+                return pd.read_json(file_path)
+            elif ext == ".txt":
+                with open(file_path, "r", encoding="utf-8") as f:
+                    lines = [line.strip() for line in f.readlines() if line.strip()]
+                return pd.DataFrame({
+                    "line_number": list(range(1, len(lines) + 1)),
+                    "text_content": lines,
+                    "char_count": [len(l) for l in lines],
+                    "word_count": [len(l.split()) for l in lines]
+                })
     
-    # Path traversal protection
-    if not str(file_path.resolve()).startswith(str(BASE_STORAGE_DIR)):
-        raise ValueError(f"Path Traversal Attempt Detected: {file_path}")
-        
-    return pd.read_csv(file_path)
+    raise FileNotFoundError(f"Artifact {artifact_id} not found in {BASE_STORAGE_DIR}")
 
 @tool
 def inspect_dataset(artifact_id: str) -> str:

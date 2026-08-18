@@ -52,12 +52,24 @@ export default function ChatPage() {
 
     try {
       const res = await sendChatMessage(input);
+      
+      let messageContent = "Error communicating with backend";
+      if (res.success) {
+        messageContent = res.data.answer;
+        // Optionally append warnings or findings to the UI if present
+        if (res.data.warnings && res.data.warnings.length > 0) {
+           messageContent += "\n\n⚠️ Warnings:\n- " + res.data.warnings.join("\n- ");
+        }
+      } else {
+        messageContent = `Error: ${res.error}`;
+      }
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: res ? res.response : "Error communicating with backend",
+        content: messageContent,
         timestamp: new Date(),
-        agentInfo: "Graph Processing",
+        agentInfo: "A.R.E.S. Core",
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
@@ -132,7 +144,7 @@ export default function ChatPage() {
                       : "bg-slate-800/50 text-gray-100 border border-purple-500/20 rounded-bl-none"
                   }`}
                 >
-                  <p className="text-sm">{message.content}</p>
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   {message.agentInfo && message.role === "assistant" && (
                     <p className="text-xs text-gray-400 mt-2">
                       {message.agentInfo}
