@@ -157,13 +157,14 @@ def scraper_node(state: AgentState) -> AgentState:
                     extracted_text = fetch_and_extract_url.invoke({"url": target_url})
                     
                     if not extracted_text.startswith("Error") and not extracted_text.startswith("HTTP Error"):
-                        # Automatically persist artifact
-                        artifact = safe_save_artifact(extracted_text, target_url, "txt")
+                        # Automatically persist artifact with correct extension
+                        ext = "csv" if target_url.endswith(".csv") else ("json" if target_url.endswith(".json") else "txt")
+                        artifact = safe_save_artifact(extracted_text, target_url, ext)
                         state["collected_data"][artifact.artifact_id] = artifact.model_dump()
                         if "scraper" not in state["completed_agents"]:
                             state["completed_agents"].append("scraper")
                         state["messages"].append(f"Scraper Agent extracted data from {target_url} (Artifact: {artifact.artifact_id}).")
-                        logger.info(f"Saved artifact {artifact.artifact_id} for URL {target_url}")
+                        logger.info(f"Saved artifact {artifact.artifact_id} ({ext}) for URL {target_url}")
                     else:
                         logger.warning(f"Error extracting URL {target_url}: {extracted_text}")
                         if "errors" not in state: state["errors"] = []
