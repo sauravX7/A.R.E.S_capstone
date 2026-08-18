@@ -375,9 +375,14 @@ def synthesizer_node(state: AgentState) -> AgentState:
         valid_artifact_ids = set(collected_data.keys())
         sanitized_artifacts = []
         for ref_id in response.supporting_artifacts:
-            # Sanitize the LLM output in case it includes the "Artifact ID: " prefix
-            clean_id = ref_id.replace("Artifact ID:", "").strip()
-            if clean_id not in valid_artifact_ids:
+            # Extract UUID pattern if present (handles 'art_<uuid>', 'Artifact ID: <uuid>', '<uuid>')
+            clean_id = ref_id.replace("Artifact ID:", "").replace("art_", "").strip()
+            uuid_match = re.search(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', ref_id, re.IGNORECASE)
+            if uuid_match and uuid_match.group(0) in valid_artifact_ids:
+                clean_id = uuid_match.group(0)
+            elif clean_id in valid_artifact_ids:
+                pass
+            else:
                 error_msg = f"Synthesizer attempted to reference an invalid or hallucinated artifact ID: {ref_id}"
                 logger.error(error_msg)
                 

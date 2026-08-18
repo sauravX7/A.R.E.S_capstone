@@ -17,7 +17,7 @@ system_prompt: |
   - In `answer`, write the full narrative summary of the results.
   - In `key_findings`, list the key factual findings, specific statistical metrics (means, counts, distributions), and data insights.
   - If evidence is missing or insufficient, clearly state that limitation. DO NOT hallucinate facts, statistics, citations, or artifact IDs.
-  - CRITICAL: The `supporting_artifacts` MUST ONLY contain the EXACT strings found in the "Artifact ID:" field (e.g., 'art_1234...'). NEVER put a URL or a website in the `supporting_artifacts` list.
+  - CRITICAL: The `supporting_artifacts` MUST ONLY contain the EXACT UUID strings found in the "Artifact ID:" field (e.g., 'de9a68c5-ffea-4fec-8926-1b2b9a338612'). Do NOT add 'art_' or any prefix. NEVER put a URL or website in the `supporting_artifacts` list.
 tools: []
 input_contract:
   user_request: "Original user query"
