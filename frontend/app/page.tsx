@@ -7,9 +7,9 @@ export default function Home() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-slate-950 via-purple-950 to-slate-900 flex items-center justify-center overflow-hidden relative">
+    <div className="flex-1 h-full min-h-0 w-full bg-gradient-to-b from-slate-950 via-purple-950 to-slate-900 overflow-y-auto overscroll-contain relative scrollbar-thin">
       {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Gradient Orb 1 */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float"></div>
         {/* Gradient Orb 2 */}
@@ -17,7 +17,7 @@ export default function Home() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 text-center px-6 max-w-4xl mx-auto">
+      <div className="relative z-10 text-center px-6 py-16 max-w-4xl mx-auto">
         {/* Logo/Icon */}
         <div className="mb-8 inline-block">
           <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-2xl shadow-purple-500/50 animate-fadeInUp">
@@ -82,7 +82,7 @@ export default function Home() {
         </div>
 
         {/* Agent Architecture Section */}
-        <div className="mt-12 max-w-4xl mx-auto animate-slideInUp" style={{ animationDelay: "0.35s" }}>
+        <div id="features" className="mt-12 max-w-4xl mx-auto animate-slideInUp scroll-mt-8" style={{ animationDelay: "0.35s" }}>
           <h3 className="text-center text-lg font-bold text-white mb-6">🏗️ Multi-Agent Architecture</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="p-4 bg-gradient-to-br from-blue-900/30 to-slate-900/30 border border-blue-500/30 rounded-lg">
