@@ -134,7 +134,7 @@ export default function ChatPage() {
         </header>
 
         {/* Messages Area */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-purple-500/20">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-4 scrollbar-thin">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center opacity-50">
