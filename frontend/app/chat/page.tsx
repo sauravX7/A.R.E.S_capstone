@@ -108,11 +108,11 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex-1 flex overflow-hidden">
+    <div className="flex-1 h-full min-h-0 flex overflow-hidden">
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-slate-950">
+      <div className="flex-1 h-full min-h-0 flex flex-col bg-slate-950 overflow-hidden">
         {/* Header */}
-        <header className="px-6 py-4 border-b border-purple-500/20 flex items-center justify-between bg-gradient-to-r from-slate-900/50 to-purple-900/20">
+        <header className="flex-shrink-0 px-6 py-4 border-b border-purple-500/20 flex items-center justify-between bg-gradient-to-r from-slate-900/50 to-purple-900/20">
           <div className="flex items-center space-x-3">
             <Sparkles className="text-purple-400" size={24} />
             <div>
@@ -134,7 +134,7 @@ export default function ChatPage() {
         </header>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-purple-500/20">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-purple-500/20">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center opacity-50">
@@ -188,7 +188,7 @@ export default function ChatPage() {
         </div>
 
         {/* Input Area */}
-        <div className="px-6 py-4 border-t border-purple-500/20 bg-gradient-to-t from-slate-950 to-slate-900/50">
+        <div className="flex-shrink-0 px-6 py-4 border-t border-purple-500/20 bg-gradient-to-t from-slate-950 to-slate-900/50">
           <div className="flex gap-3">
             <input
               type="text"
@@ -212,7 +212,7 @@ export default function ChatPage() {
 
       {/* Agent Status Sidebar */}
       {showAgentStatus && (
-        <div className="w-80 border-l border-purple-500/20 overflow-y-auto bg-gradient-to-b from-slate-900 to-slate-800">
+        <div className="w-80 h-full min-h-0 border-l border-purple-500/20 overflow-y-auto bg-gradient-to-b from-slate-900 to-slate-800">
           <AgentStatus />
         </div>
       )}

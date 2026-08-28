@@ -64,15 +64,15 @@ export default function AgentsPage() {
   ];
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-slate-950">
+    <div className="flex-1 h-full min-h-0 flex overflow-hidden bg-slate-950">
       {/* Agents List */}
-      <div className="w-80 border-r border-purple-500/20 bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col">
-        <div className="px-6 py-4 border-b border-purple-500/20">
+      <div className="w-80 h-full min-h-0 border-r border-purple-500/20 bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col">
+        <div className="flex-shrink-0 px-6 py-4 border-b border-purple-500/20">
           <h2 className="text-xl font-bold">Agents</h2>
           <p className="text-sm text-gray-400 mt-1">Manage and monitor agents</p>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-purple-500/20">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-purple-500/20">
           {agents.map((agent) => {
             const AgentIcon = agent.icon;
             const isSelected = agent.id === selectedAgent;
@@ -112,9 +112,9 @@ export default function AgentsPage() {
       </div>
 
       {/* Agent Details */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 h-full min-h-0 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-purple-500/20 bg-gradient-to-r from-slate-900/50 to-purple-900/20">
+        <div className="flex-shrink-0 px-6 py-4 border-b border-purple-500/20 bg-gradient-to-r from-slate-900/50 to-purple-900/20">
           <div className="flex items-start justify-between">
             <div className="flex items-start space-x-4">
               <div className="p-3 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600">
@@ -142,7 +142,7 @@ export default function AgentsPage() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-purple-500/20">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-purple-500/20">
           {/* Metrics */}
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-purple-500/20 rounded-lg p-6">

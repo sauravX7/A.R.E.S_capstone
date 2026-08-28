@@ -41,15 +41,15 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
+    <div className="flex-1 h-full min-h-0 flex flex-col overflow-hidden bg-slate-950">
       {/* Header */}
-      <header className="px-6 py-4 border-b border-purple-500/20 bg-gradient-to-r from-slate-900/50 to-purple-900/20">
+      <header className="flex-shrink-0 px-6 py-4 border-b border-purple-500/20 bg-gradient-to-r from-slate-900/50 to-purple-900/20">
         <h2 className="text-2xl font-bold">Dashboard</h2>
         <p className="text-sm text-gray-400 mt-1">View your analyses and research insights</p>
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-purple-500/20">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-purple-500/20">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((stat, index) => {
