@@ -175,12 +175,15 @@ export default function ChatPage() {
           )}
           {loading && (
             <div className="flex justify-start">
-              <div className="bg-slate-800/50 text-gray-100 border border-purple-500/20 px-4 py-3 rounded-2xl rounded-bl-none">
-                <div className="flex space-x-2">
+              <div className="bg-slate-800/50 text-gray-100 border border-purple-500/20 px-4 py-3 rounded-2xl rounded-bl-none flex items-center space-x-3">
+                <div className="flex space-x-1.5">
                   <div className="w-2 h-2 rounded-full bg-purple-400 animate-bounce"></div>
-                  <div className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "0.1s" }}></div>
-                  <div className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                  <div className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "0.15s" }}></div>
+                  <div className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "0.3s" }}></div>
                 </div>
+                <span className="text-xs text-purple-300 animate-pulse">
+                  Executing multi-agent workflow (Orchestrator → Scraper → EDA → Synthesizer)...
+                </span>
               </div>
             </div>
           )}

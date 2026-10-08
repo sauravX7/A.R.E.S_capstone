@@ -2,9 +2,13 @@ fastapi
 uvicorn[standard]
 langgraph
 langchain
+langchain-ollama
 ollama
 pydantic
 pydantic-settings
 pyyaml
 httpx
 beautifulsoup4
+pandas
+matplotlib
+seaborn

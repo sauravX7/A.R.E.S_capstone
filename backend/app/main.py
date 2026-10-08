@@ -22,6 +22,16 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(chat.router, prefix="/api")
 
+@app.get("/")
+def root():
+    return {
+        "status": "online",
+        "system": "A.R.E.S. Autonomous Research System API",
+        "interactive_docs": "http://localhost:8000/docs",
+        "health_check": "http://localhost:8000/health",
+        "chat_endpoint": "http://localhost:8000/api/chat"
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
